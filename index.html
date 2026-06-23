@@ -164,9 +164,9 @@
     <div class="ctrl"><span>MIC LEVEL</span></div>
     <div class="meter"><div class="fill" id="meterFill"></div><div class="thr" id="meterThr"></div></div>
     <div class="ctrl">
-      <span>SENSITIVITY</span>
-      <input type="range" id="sens" min="1" max="100" value="35">
-      <span id="sensVal">35</span>
+      <span>SENSITIVITY &rarr;</span>
+      <input type="range" id="sens" min="1" max="100" value="75">
+      <span id="sensVal">75</span>
     </div>
     <div class="status" id="micStatus">Mic: off</div>
   </div>
@@ -376,15 +376,25 @@ tapKey.addEventListener("pointercancel", e=>{ if(dec_isOn) keyUp(e); });
 let micStream=null, micCtx=null, analyser=null, micData=null;
 const sensEl=$("sens"), meterFill=$("meterFill"), meterThr=$("meterThr"), micStatus=$("micStatus");
 sensEl.addEventListener("input", ()=>{ $("sensVal").textContent=sensEl.value; positionThr(); });
-function threshold(){ return (+sensEl.value)/100 * 0.5; } // RMS threshold 0..0.5
-function positionThr(){ meterThr.style.left = (threshold()/0.5*100) + "%"; }
+// Higher slider = MORE sensitive = LOWER threshold. Exponential range so even
+// faint sounds (quiet speaker across the room) can be detected at high settings.
+const METER_MAX = 0.10;     // full meter ≈ a loud, close tone
+const THR_HI = 0.10;        // slider at min: only loud sounds trigger
+const THR_LO = 0.0008;      // slider at max: extremely faint sounds trigger
+function threshold(){
+  const s = (+sensEl.value)/100;                 // 0.01 .. 1.0
+  return THR_HI * Math.pow(THR_LO/THR_HI, s);    // 0.10 (low sens) → 0.0008 (high sens)
+}
+// sqrt display so the quiet end of the meter is readable
+function meterPct(v){ return Math.min(100, Math.sqrt(Math.min(v,METER_MAX)/METER_MAX)*100); }
+function positionThr(){ meterThr.style.left = meterPct(threshold()) + "%"; }
 positionThr();
 
 function readMic(now){
   analyser.getFloatTimeDomainData(micData);
   let sum=0; for (let i=0;i<micData.length;i++){ const v=micData[i]; sum+=v*v; }
   const rms = Math.sqrt(sum/micData.length);
-  meterFill.style.width = Math.min(100, rms/0.5*100) + "%";
+  meterFill.style.width = meterPct(rms) + "%";
   decEdge(rms > threshold(), now);
 }
 async function startMic(){
