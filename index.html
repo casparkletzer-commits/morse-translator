@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MORSE://TRANSLATOR</title>
+<style>
+  :root{
+    --bg:#050a05;
+    --panel:#0a140a;
+    --green:#33ff66;
+    --green-dim:#1f9a40;
+    --green-fade:#0e3a1c;
+    --amber:#ffb000;
+    --red:#ff4444;
+    --mono:'Courier New',ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--bg);}
+  body{
+    font-family:var(--mono);
+    color:var(--green);
+    line-height:1.5;
+    padding:14px;
+    min-height:100vh;
+    text-shadow:0 0 4px rgba(51,255,102,.35);
+    overflow-x:hidden;
+  }
+  /* CRT scanline overlay */
+  body::after{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:9999;
+    background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0px,rgba(0,0,0,0) 2px,rgba(0,0,0,.18) 3px,rgba(0,0,0,0) 4px);
+    mix-blend-mode:multiply;
+  }
+  .wrap{max-width:680px;margin:0 auto;}
+
+  header{border:1px solid var(--green-dim);padding:10px 12px;margin-bottom:14px;background:var(--panel);}
+  .titlebar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:blink 1.6s steps(1) infinite;}
+  @keyframes blink{50%{opacity:.25;}}
+  h1{font-size:16px;margin:0;letter-spacing:1px;font-weight:bold;}
+  .sub{font-size:11px;color:var(--green-dim);margin-top:4px;}
+
+  .panel{border:1px solid var(--green-dim);background:var(--panel);padding:12px;margin-bottom:14px;}
+  .label{font-size:11px;color:var(--green-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;}
+
+  textarea,input[type=text]{
+    width:100%;background:#020602;color:var(--green);border:1px solid var(--green-fade);
+    font-family:var(--mono);font-size:16px;padding:10px;resize:vertical;outline:none;
+    text-shadow:0 0 4px rgba(51,255,102,.35);
+  }
+  textarea:focus{border-color:var(--green);box-shadow:0 0 8px rgba(51,255,102,.3) inset;}
+  textarea::placeholder{color:#1c5a2c;}
+  .out{min-height:70px;white-space:pre-wrap;word-break:break-word;}
+
+  .modebar{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px;}
+  .swap{flex:1;text-align:center;border:1px solid var(--green-dim);padding:10px;font-size:13px;letter-spacing:1px;background:#071007;}
+
+  .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+  button{
+    font-family:var(--mono);background:#071007;color:var(--green);border:1px solid var(--green-dim);
+    padding:11px 14px;font-size:13px;cursor:pointer;letter-spacing:1px;flex:1;min-width:90px;
+    text-shadow:0 0 4px rgba(51,255,102,.35);transition:background .1s,box-shadow .1s;
+  }
+  button:hover{background:#0d1f0d;}
+  button:active{background:var(--green-dim);color:#031003;}
+  button.primary{border-color:var(--green);box-shadow:0 0 8px rgba(51,255,102,.25);}
+  button.danger{color:var(--red);border-color:#7a2020;text-shadow:0 0 4px rgba(255,68,68,.4);}
+  button[disabled]{opacity:.35;cursor:not-allowed;}
+
+  .ctrl{display:flex;align-items:center;gap:10px;margin-top:6px;font-size:12px;color:var(--green-dim);}
+  input[type=range]{flex:1;accent-color:var(--green);height:24px;}
+
+  .lamp{
+    width:100%;height:46px;border:1px solid var(--green-fade);margin-top:10px;display:flex;
+    align-items:center;justify-content:center;font-size:12px;color:var(--green-fade);background:#020602;
+    transition:background .03s,box-shadow .03s,color .03s;
+  }
+  .lamp.on{background:var(--green);color:#031003;box-shadow:0 0 26px var(--green),0 0 60px var(--green-dim);}
+
+  .meter{height:14px;border:1px solid var(--green-fade);background:#020602;margin-top:8px;position:relative;overflow:hidden;}
+  .meter .fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--green);box-shadow:0 0 10px var(--green);}
+  .meter .thr{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--amber);box-shadow:0 0 6px var(--amber);}
+
+  .key{
+    width:100%;height:120px;border:2px dashed var(--green-dim);background:#040c04;margin-top:10px;
+    display:flex;align-items:center;justify-content:center;font-size:14px;letter-spacing:2px;
+    user-select:none;touch-action:none;color:var(--green-dim);
+  }
+  .key.down{background:var(--green);color:#031003;border-style:solid;box-shadow:0 0 26px var(--green) inset;}
+
+  .live{font-size:22px;letter-spacing:3px;min-height:30px;color:var(--amber);text-shadow:0 0 6px rgba(255,176,0,.5);word-break:break-all;}
+  .status{font-size:12px;color:var(--green-dim);margin-top:8px;}
+  .status.err{color:var(--red);}
+
+  details{border:1px solid var(--green-fade);margin-bottom:14px;background:var(--panel);}
+  summary{padding:10px 12px;cursor:pointer;font-size:12px;letter-spacing:1px;color:var(--green-dim);}
+  .ref{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:4px;padding:0 12px 12px;font-size:12px;}
+  .ref span{border:1px solid var(--green-fade);padding:3px 5px;}
+  .ref b{color:var(--amber);}
+
+  footer{text-align:center;font-size:11px;color:var(--green-fade);margin:18px 0 6px;}
+  .cursor::after{content:"_";animation:blink 1s steps(1) infinite;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="titlebar">
+      <span class="dot"></span>
+      <h1>MORSE://TRANSLATOR</h1>
+    </div>
+    <div class="sub">v1.0 &nbsp;|&nbsp; offline terminal &nbsp;|&nbsp; no account, no API key needed &nbsp;|&nbsp; language: ENGLISH</div>
+  </header>
+
+  <!-- TRANSLATE -->
+  <div class="modebar">
+    <div class="swap" id="modeBtn" role="button" tabindex="0">MODE: TEXT &rarr; MORSE &nbsp;[ tap to switch ]</div>
+  </div>
+
+  <div class="panel">
+    <div class="label"><span id="inLabel">Input &middot; plain text</span></div>
+    <textarea id="input" rows="3" placeholder="Type here..." autocapitalize="characters"></textarea>
+    <div class="btnrow">
+      <button id="sampleBtn">SAMPLE: SOS</button>
+      <button id="clearBtn">CLEAR</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="label"><span id="outLabel">Output &middot; morse code</span><span id="copyBtn" style="cursor:pointer;">[ copy ]</span></div>
+    <div class="out" id="output"></div>
+    <div class="ctrl">
+      <span>SPEED</span>
+      <input type="range" id="wpm" min="5" max="30" value="13">
+      <span id="wpmVal">13 WPM</span>
+    </div>
+    <div class="btnrow">
+      <button id="playBtn" class="primary">&#9658; PLAY MORSE</button>
+      <button id="stopBtn" class="danger" disabled>&#9632; STOP</button>
+    </div>
+    <div class="lamp" id="lamp">SIGNAL</div>
+  </div>
+
+  <!-- LISTEN / DECODE -->
+  <div class="panel">
+    <div class="label"><span>Listen &amp; Decode &middot; live input</span></div>
+    <div class="status">Decode morse by TAPPING the key below, or turn on the MIC to listen for beeps.<br>Set SPEED above to roughly match the sending speed.</div>
+
+    <div class="live">DECODING: <span id="liveSym" class="cursor"></span></div>
+
+    <div class="label" style="margin-top:10px;">Decoded text</div>
+    <textarea id="micOut" class="out" rows="2" placeholder="Decoded letters appear here..." readonly></textarea>
+
+    <!-- TAP KEY -->
+    <div class="key" id="tapKey">PRESS &amp; HOLD = SEND DOT/DASH</div>
+
+    <div class="btnrow">
+      <button id="micBtn">&#127908; START MIC</button>
+      <button id="decClear" class="danger">CLEAR</button>
+    </div>
+
+    <div class="ctrl"><span>MIC LEVEL</span></div>
+    <div class="meter"><div class="fill" id="meterFill"></div><div class="thr" id="meterThr"></div></div>
+    <div class="ctrl">
+      <span>SENSITIVITY</span>
+      <input type="range" id="sens" min="1" max="100" value="35">
+      <span id="sensVal">35</span>
+    </div>
+    <div class="status" id="micStatus">Mic: off</div>
+  </div>
+
+  <details>
+    <summary>&#9656; MORSE REFERENCE TABLE</summary>
+    <div class="ref" id="refTable"></div>
+  </details>
+
+  <footer>// runs 100% in your browser &middot; works offline //</footer>
+</div>
+
+<script>
+"use strict";
+
+/* ---------- Morse dictionary ---------- */
+const M = {
+  A:".-",B:"-...",C:"-.-.",D:"-..",E:".",F:"..-.",G:"--.",H:"....",I:"..",J:".---",
+  K:"-.-",L:".-..",M:"--",N:"-.",O:"---",P:".--.",Q:"--.-",R:".-.",S:"...",T:"-",
+  U:"..-",V:"...-",W:".--",X:"-..-",Y:"-.--",Z:"--..",
+  "0":"-----","1":".----","2":"..---","3":"...--","4":"....-","5":".....",
+  "6":"-....","7":"--...","8":"---..","9":"----.",
+  ".":".-.-.-",",":"--..--","?":"..--..","'":".----.","!":"-.-.--","/":"-..-.",
+  "(":"-.--.",")":"-.--.-","&":".-...",":":"---...",";":"-.-.-.","=":"-...-",
+  "+":".-.-.","-":"-....-","_":"..--.-",'"':".-..-.","$":"...-..-","@":".--.-."
+};
+const R = {}; for (const k in M) R[M[k]] = k;
+
+/* ---------- Translate ---------- */
+let mode = "t2m"; // t2m = text->morse, m2t = morse->text
+const $ = id => document.getElementById(id);
+const inputEl = $("input"), outputEl = $("output");
+
+function encode(text){
+  return text.toUpperCase().split("\n").map(line =>
+    line.split(/\s+/).filter(Boolean).map(word =>
+      [...word].map(c => M[c] || "").filter(Boolean).join(" ")
+    ).join(" / ")
+  ).join("\n");
+}
+function decode(morse){
+  return morse.split("\n").map(line =>
+    line.trim().split("/").map(word =>
+      word.trim().split(/\s+/).filter(Boolean).map(sym => R[sym] || "?").join("")
+    ).join(" ")
+  ).join("\n");
+}
+function translate(){
+  const v = inputEl.value;
+  outputEl.textContent = mode === "t2m" ? encode(v) : decode(v);
+}
+function applyMode(){
+  if (mode === "t2m"){
+    $("modeBtn").innerHTML = "MODE: TEXT &rarr; MORSE &nbsp;[ tap to switch ]";
+    $("inLabel").textContent = "Input · plain text";
+    $("outLabel").textContent = "Output · morse code";
+    inputEl.placeholder = "Type a message...  e.g. HELLO WORLD";
+    inputEl.setAttribute("autocapitalize","characters");
+  } else {
+    $("modeBtn").innerHTML = "MODE: MORSE &rarr; TEXT &nbsp;[ tap to switch ]";
+    $("inLabel").textContent = "Input · morse code";
+    $("outLabel").textContent = "Output · plain text";
+    inputEl.placeholder = "Type morse...  use . and -  | space=letter  / =word\ne.g. ... --- ...";
+    inputEl.setAttribute("autocapitalize","none");
+  }
+  translate();
+}
+$("modeBtn").addEventListener("click", () => {
+  // carry the result over to the other side so switching feels natural
+  if (outputEl.textContent.trim()) inputEl.value = outputEl.textContent;
+  mode = mode === "t2m" ? "m2t" : "t2m";
+  applyMode();
+});
+inputEl.addEventListener("input", translate);
+$("clearBtn").addEventListener("click", () => { inputEl.value=""; translate(); inputEl.focus(); });
+$("sampleBtn").addEventListener("click", () => {
+  if (mode === "t2m") inputEl.value = "SOS";
+  else inputEl.value = "... --- ...";
+  translate();
+});
+$("copyBtn").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(outputEl.textContent); flash($("copyBtn"),"[ copied! ]","[ copy ]"); }
+  catch(e){ flash($("copyBtn"),"[ select+copy ]","[ copy ]"); }
+});
+function flash(el,on,off){ el.textContent=on; setTimeout(()=>el.textContent=off,1100); }
+
+/* ---------- Speed ---------- */
+const wpmEl = $("wpm");
+function WPM(){ return +wpmEl.value; }
+function unitMs(){ return 1200 / WPM(); }     // duration of one "dit" in ms
+wpmEl.addEventListener("input", () => $("wpmVal").textContent = WPM()+" WPM");
+$("wpmVal").textContent = WPM()+" WPM";
+
+/* ---------- Audio playback ---------- */
+let audioCtx = null, playTimers = [], playOsc = null;
+function getCtx(){ audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)(); return audioCtx; }
+const lamp = $("lamp");
+
+function morseToPlay(){
+  const src = mode === "t2m" ? outputEl.textContent : inputEl.value;
+  return src.replace(/[^.\-/\s]/g,"");
+}
+function stopPlay(){
+  playTimers.forEach(clearTimeout); playTimers = [];
+  if (playOsc){ try{ playOsc.stop(); }catch(e){} playOsc=null; }
+  lamp.classList.remove("on"); lamp.textContent = "SIGNAL";
+  $("playBtn").disabled = false; $("stopBtn").disabled = true;
+}
+$("playBtn").addEventListener("click", () => {
+  const morse = morseToPlay().trim();
+  if (!morse){ lamp.textContent = "NOTHING TO PLAY"; return; }
+  stopPlay();
+  const ctx = getCtx(); if (ctx.state === "suspended") ctx.resume();
+  const U = unitMs()/1000;          // seconds
+  const ramp = 0.004;
+  const osc = ctx.createOscillator(); const gain = ctx.createGain();
+  osc.type="sine"; osc.frequency.value=600; gain.gain.value=0;
+  osc.connect(gain); gain.connect(ctx.destination);
+  playOsc = osc;
+
+  let t = ctx.currentTime + 0.08;
+  const start = t;
+  const vis = []; // [relStartSec, durSec]
+  const words = morse.split("/").map(w=>w.trim()).filter(Boolean);
+  words.forEach((word, wi) => {
+    if (wi>0) t += U*7;
+    const letters = word.split(/\s+/).filter(Boolean);
+    letters.forEach((letter, li) => {
+      if (li>0) t += U*3;
+      [...letter].forEach((sym, si) => {
+        if (si>0) t += U;
+        const dur = (sym === "-") ? U*3 : U;
+        gain.gain.setValueAtTime(0,t);
+        gain.gain.linearRampToValueAtTime(.3, t+ramp);
+        gain.gain.setValueAtTime(.3, t+dur-ramp);
+        gain.gain.linearRampToValueAtTime(0, t+dur);
+        vis.push([t-start, dur]);
+        t += dur;
+      });
+    });
+  });
+
+  osc.start(start); osc.stop(t+0.05);
+  $("playBtn").disabled = true; $("stopBtn").disabled = false;
+
+  // drive the visual lamp
+  vis.forEach(([rs,du]) => {
+    playTimers.push(setTimeout(()=>{ lamp.classList.add("on"); lamp.textContent="● ● ●"; }, rs*1000));
+    playTimers.push(setTimeout(()=>{ lamp.classList.remove("on"); lamp.textContent="SIGNAL"; }, (rs+du)*1000));
+  });
+  playTimers.push(setTimeout(stopPlay, (t-start)*1000 + 120));
+});
+$("stopBtn").addEventListener("click", stopPlay);
+
+/* ---------- Unified decoder (mic + tap key) ---------- */
+const liveSym = $("liveSym"), micOut = $("micOut");
+let dec_isOn=false, dec_last=performance.now(), dec_syms="", dec_letterDone=true, dec_wordDone=true;
+const MIN_TONE = 28; // ms, ignore blips
+
+function decodeSymbol(s){ return s ? (R[s] || "?") : ""; }
+function decAppend(ch){ micOut.value += ch; micOut.scrollTop = micOut.scrollHeight; }
+function decReset(){ dec_syms=""; dec_letterDone=true; dec_wordDone=true; micOut.value=""; liveSym.textContent=""; }
+$("decClear").addEventListener("click", decReset);
+
+function decEdge(on, now){
+  if (on === dec_isOn) return;
+  const dur = now - dec_last;
+  if (dec_isOn){ // tone just ended
+    if (dur >= MIN_TONE){ dec_syms += (dur < 2*unitMs()) ? "." : "-"; liveSym.textContent = dec_syms; }
+  }
+  dec_isOn = on; dec_last = now;
+  if (on){ dec_letterDone=false; dec_wordDone=false; }
+}
+function decTick(now){
+  if (dec_isOn) return;
+  const sil = now - dec_last;
+  if (!dec_letterDone && dec_syms.length && sil >= 2*unitMs()){
+    decAppend(decodeSymbol(dec_syms)); dec_syms=""; dec_letterDone=true; liveSym.textContent="";
+  }
+  if (!dec_wordDone && dec_letterDone && sil >= 5*unitMs()){
+    decAppend(" "); dec_wordDone=true;
+  }
+}
+
+/* rAF loop (active while mic on, or shortly after tap activity) */
+let rafId=null, micActive=false;
+const IDLE_STOP = 12000;
+function ensureLoop(){ if (!rafId) rafId = requestAnimationFrame(loop); }
+function loop(){
+  const now = performance.now();
+  if (micActive) readMic(now);
+  decTick(now);
+  if (micActive || (now - dec_last) < IDLE_STOP) rafId = requestAnimationFrame(loop);
+  else rafId = null;
+}
+
+/* ---------- Tap key (mouse / touch) ---------- */
+const tapKey = $("tapKey");
+function keyDown(e){ e.preventDefault(); tapKey.classList.add("down"); decEdge(true, performance.now()); ensureLoop(); }
+function keyUp(e){ e.preventDefault(); tapKey.classList.remove("down"); decEdge(false, performance.now()); ensureLoop(); }
+tapKey.addEventListener("pointerdown", keyDown);
+tapKey.addEventListener("pointerup", keyUp);
+tapKey.addEventListener("pointerleave", e=>{ if(dec_isOn) keyUp(e); });
+tapKey.addEventListener("pointercancel", e=>{ if(dec_isOn) keyUp(e); });
+
+/* ---------- Microphone ---------- */
+let micStream=null, micCtx=null, analyser=null, micData=null;
+const sensEl=$("sens"), meterFill=$("meterFill"), meterThr=$("meterThr"), micStatus=$("micStatus");
+sensEl.addEventListener("input", ()=>{ $("sensVal").textContent=sensEl.value; positionThr(); });
+function threshold(){ return (+sensEl.value)/100 * 0.5; } // RMS threshold 0..0.5
+function positionThr(){ meterThr.style.left = (threshold()/0.5*100) + "%"; }
+positionThr();
+
+function readMic(now){
+  analyser.getFloatTimeDomainData(micData);
+  let sum=0; for (let i=0;i<micData.length;i++){ const v=micData[i]; sum+=v*v; }
+  const rms = Math.sqrt(sum/micData.length);
+  meterFill.style.width = Math.min(100, rms/0.5*100) + "%";
+  decEdge(rms > threshold(), now);
+}
+async function startMic(){
+  try{
+    micStream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+    micCtx = new (window.AudioContext||window.webkitAudioContext)();
+    const src = micCtx.createMediaStreamSource(micStream);
+    analyser = micCtx.createAnalyser(); analyser.fftSize = 1024;
+    micData = new Float32Array(analyser.fftSize);
+    src.connect(analyser);
+    micActive = true; ensureLoop();
+    $("micBtn").innerHTML = "&#9632; STOP MIC"; $("micBtn").classList.add("danger");
+    micStatus.className="status"; micStatus.textContent="Mic: listening… make a steady beep/tone for dashes, short for dots.";
+  }catch(err){
+    micStatus.className="status err"; micStatus.textContent="Mic error: "+err.message+" (allow microphone access)";
+  }
+}
+function stopMic(){
+  micActive=false;
+  if (micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream=null; }
+  if (micCtx){ micCtx.close(); micCtx=null; }
+  meterFill.style.width="0%";
+  $("micBtn").innerHTML="&#127908; START MIC"; $("micBtn").classList.remove("danger");
+  micStatus.className="status"; micStatus.textContent="Mic: off";
+}
+$("micBtn").addEventListener("click", ()=>{ micActive ? stopMic() : startMic(); });
+
+/* ---------- Reference table ---------- */
+(function(){
+  const order = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".split("");
+  $("refTable").innerHTML = order.map(c=>`<span><b>${c}</b> ${M[c].replace(/-/g,"−")}</span>`).join("");
+})();
+
+/* init */
+applyMode();
+</script>
+</body>
+</html>
